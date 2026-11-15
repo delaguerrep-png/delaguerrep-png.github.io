@@ -46,19 +46,23 @@ const $ = id => document.getElementById(id);
 
 $("login").onclick = () => {
   const u = new URL(`https://www.facebook.com/${V}/dialog/oauth`);
-  u.search = new URLSearchParams({client_id: APP_ID, config_id: CONFIG_ID, redirect_uri: REDIRECT,
-                                  response_type: "token", state: "storystudio"}).toString();
+  u.search = new URLSearchParams({client_id: APP_ID, redirect_uri: REDIRECT, response_type: "token",
+                                  state: "storystudio", auth_type: "rerequest",
+                                  scope: "pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement"}).toString();
   location.href = u.toString();
 };
 
 const frag = new URLSearchParams(location.hash.slice(1));
+const qs = new URLSearchParams(location.search);
 const shortToken = frag.get("access_token");
 history.replaceState(null, "", REDIRECT);          // remove the code from the address bar
 if (shortToken) {
   $("s1status").innerHTML = '<span class="ok">✔ Connected.</span>';
   $("s2").style.display = "block";
-} else if (frag.get("error")) {
-  $("s1status").innerHTML = '<span class="err">Facebook said: ' + (frag.get("error_description") || frag.get("error")) + '</span>';
+} else if (frag.get("error") || qs.get("error")) {
+  const msg = frag.get("error_description") || frag.get("error") || qs.get("error_description") || qs.get("error");
+  const sp = document.createElement("span"); sp.className = "err"; sp.textContent = "Facebook said: " + msg;
+  $("s1status").replaceChildren(sp);
 }
 
 $("go").onclick = async () => {
