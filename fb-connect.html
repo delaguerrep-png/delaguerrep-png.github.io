@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Story Studio – Facebook connection</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  main{max-width:760px}
+  .step{background:#fff;border:1px solid #e3ddd0;border-radius:12px;padding:18px 20px;margin:18px 0}
+  .step h2{margin-top:0;font-size:1.15rem}
+  input[type=password],input[type=text]{width:100%;padding:10px;font-size:1rem;border:1px solid #c9c2b4;border-radius:8px;box-sizing:border-box}
+  button{background:#1877f2;color:#fff;border:0;border-radius:8px;padding:10px 18px;font-size:1rem;cursor:pointer;margin-top:10px}
+  button.copy{background:#2e7d5b}
+  .page{border:1px solid #d7e7dd;border-radius:10px;padding:12px;margin:10px 0;background:#f6fbf8}
+  .secret{font-family:monospace;font-size:.8rem;word-break:break-all;background:#eee;padding:8px;border-radius:6px;max-height:4.5em;overflow:hidden}
+  .ok{color:#2e7d5b;font-weight:600}.err{color:#b23b2a;font-weight:600}
+  .note{font-size:.9rem;color:#555}
+</style></head><body>
+<header><h1>Story Studio – connect Facebook Pages</h1>
+<p class="note">Private setup page. Everything on this page happens only inside your own browser — nothing is sent to or stored on this website.</p></header>
+<main>
+<div class="step" id="s1">
+  <h2>Step 1 · Allow Story Studio to post to your Pages</h2>
+  <p>Click the button, choose <b>both Pages</b> and approve. Facebook brings you back here.</p>
+  <button id="login">Connect with Facebook</button>
+  <p id="s1status"></p>
+</div>
+<div class="step" id="s2" style="display:none">
+  <h2>Step 2 · Paste the App Secret</h2>
+  <p>Open <a href="https://developers.facebook.com/apps/1155201330778167/settings/basic/" target="_blank" rel="noopener">Story Studio → App settings → Basic</a>, click <b>Show</b> next to <b>App secret</b>, copy it and paste it here. It is used once, in this browser only, to make the posting codes permanent.</p>
+  <input type="password" id="secret" autocomplete="off" placeholder="App secret">
+  <button id="go">Create permanent posting codes</button>
+  <p id="s2status"></p>
+</div>
+<div class="step" id="s3" style="display:none">
+  <h2>Step 3 · Copy each code into GitHub</h2>
+  <p>For each Page: click <b>Copy</b>, then click <b>Open GitHub</b> and paste it as the secret value, then <b>Add secret</b>.</p>
+  <div id="pages"></div>
+  <p class="note">These codes do not expire. You can cancel them any time in Facebook → Settings → Business integrations.</p>
+</div>
+</main>
+<script>
+const APP_ID = "1155201330778167", CONFIG_ID = "4439401192873150", V = "v27.0";
+const REDIRECT = location.origin + location.pathname;
+const SECRET_NAME = {"lantern light bible stories": "FB_PAGE_TOKEN_BIBLE", "halal money explained": "FB_PAGE_TOKEN_FINANCE"};
+const $ = id => document.getElementById(id);
+
+$("login").onclick = () => {
+  const u = new URL(`https://www.facebook.com/${V}/dialog/oauth`);
+  u.search = new URLSearchParams({client_id: APP_ID, redirect_uri: REDIRECT, response_type: "token",
+                                  state: "storystudio", auth_type: "rerequest",
+                                  scope: "pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement"}).toString();
+  location.href = u.toString();
+};
+
+const frag = new URLSearchParams(location.hash.slice(1));
+const qs = new URLSearchParams(location.search);
+const shortToken = frag.get("access_token");
+history.replaceState(null, "", REDIRECT);          // remove the code from the address bar
+if (shortToken) {
+  $("s1status").innerHTML = '<span class="ok">✔ Connected.</span>';
+  $("s2").style.display = "block";
+} else if (frag.get("error") || qs.get("error")) {
+  const msg = frag.get("error_description") || frag.get("error") || qs.get("error_description") || qs.get("error");
+  const sp = document.createElement("span"); sp.className = "err"; sp.textContent = "Facebook said: " + msg;
+  $("s1status").replaceChildren(sp);
+}
+
+$("go").onclick = async () => {
+  const secret = $("secret").value.trim();
+  if (!secret) { $("s2status").innerHTML = '<span class="err">Paste the App secret first.</span>'; return; }
+  $("s2status").textContent = "Working…";
+  try {
+    const ex = await fetch(`https://graph.facebook.com/${V}/oauth/access_token?` + new URLSearchParams({
+      grant_type: "fb_exchange_token", client_id: APP_ID, client_secret: secret, fb_exchange_token: shortToken}));
+    const exj = await ex.json();
+    if (!exj.access_token) throw new Error(JSON.stringify(exj.error || exj));
+    const acc = await fetch(`https://graph.facebook.com/${V}/me/accounts?fields=name,id,access_token&limit=50&access_token=` + encodeURIComponent(exj.access_token));
+    const accj = await acc.json();
+    if (!accj.data) throw new Error(JSON.stringify(accj.error || accj));
+    $("secret").value = "";
+    $("s2status").innerHTML = '<span class="ok">✔ Done.</span>';
+    const wanted = accj.data.filter(p => SECRET_NAME[p.name.toLowerCase()]);
+    if (!wanted.length) throw new Error("Neither Page was shared with Story Studio. Go back to step 1 and select both Pages.");
+    $("s3").style.display = "block";
+    for (const p of wanted) {
+      const name = SECRET_NAME[p.name.toLowerCase()];
+      const box = document.createElement("div"); box.className = "page";
+      box.innerHTML = `<b>${p.name}</b> (Page ID ${p.id})<br>GitHub secret name: <code>${name}</code>
+        <div class="secret">••••••••••••••••••••••••••••••••</div>`;
+      const c = document.createElement("button"); c.className = "copy"; c.textContent = "Copy code";
+      c.onclick = async () => { await navigator.clipboard.writeText(p.access_token); c.textContent = "Copied ✔"; };
+      const g = document.createElement("button"); g.textContent = "Open GitHub";
+      g.onclick = () => window.open("https://github.com/delaguerrep-png/story-studio/settings/secrets/actions/new", "_blank");
+      box.append(c, document.createTextNode(" "), g); $("pages").append(box);
+    }
+  } catch (e) {
+    $("s2status").innerHTML = '<span class="err">Problem: ' + e.message + '</span>';
+  }
+};
+</script>
+<footer>© 2026 Lantern Light Studio · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a></footer>
+</body></html>
