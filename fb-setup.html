@@ -48,7 +48,7 @@ $("login").onclick = () => {
   const u = new URL(`https://www.facebook.com/${V}/dialog/oauth`);
   u.search = new URLSearchParams({client_id: APP_ID, redirect_uri: REDIRECT, response_type: "token",
                                   state: "storystudio", auth_type: "rerequest",
-                                  scope: "pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement"}).toString();
+                                  scope: "pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement,pages_read_user_content"}).toString();
   location.href = u.toString();
 };
 
